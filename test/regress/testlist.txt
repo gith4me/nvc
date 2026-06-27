@@ -1485,3 +1485,4 @@ vhpi504          vhpi
 vhpi505          vhpi
 vhpi506          vhpi
 vhpi507          vhpi
+vhpi508          vhpi

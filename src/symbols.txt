@@ -119,6 +119,8 @@
   nvc_vhpi_create;
   nvc_vhpi_create_array_subtype;
   nvc_vhpi_create_record_type;
+  nvc_vhpi_create_std_logic;
+  nvc_vhpi_create_std_logic_vector;
   nvc_vhpi_handle_by_type_name;
 
   # Unit test

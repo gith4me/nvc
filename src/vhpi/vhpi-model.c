@@ -4629,6 +4629,37 @@ vhpiHandleT nvc_vhpi_create_record_type(const char *name, int nfields,
 }
 
 DLLEXPORT
+vhpiHandleT nvc_vhpi_create_std_logic(vhpiHandleT region, const char *name)
+{
+   VHPI_TRACE("region=%s name=%s", handle_pp(region), name);
+
+   vhpiHandleT type = nvc_vhpi_handle_by_type_name("std_logic");
+   if (type == NULL)
+      return NULL;
+
+   return nvc_vhpi_create(vhpiSigDeclK, region, type, name);
+}
+
+DLLEXPORT
+vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
+                                             const char *name,
+                                             int left, int right)
+{
+   VHPI_TRACE("region=%s name=%s left=%d right=%d", handle_pp(region),
+              name, left, right);
+
+   vhpiHandleT base = nvc_vhpi_handle_by_type_name("std_logic_vector");
+   if (base == NULL)
+      return NULL;
+
+   vhpiHandleT type = nvc_vhpi_create_array_subtype(base, left, right);
+   if (type == NULL)
+      return NULL;
+
+   return nvc_vhpi_create(vhpiSigDeclK, region, type, name);
+}
+
+DLLEXPORT
 int vhpi_get_foreignf_info(vhpiHandleT handle, vhpiForeignDataT *foreignDatap)
 {
    vhpi_clear_error();

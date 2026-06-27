@@ -63,6 +63,15 @@ vhpiHandleT nvc_vhpi_create_record_type(const char *name, int nfields,
                                         const char *const *field_names,
                                         const vhpiHandleT *field_types);
 
+// Convenience wrappers for creating signals of the most common types.
+// These look up the type and create the signal in one call and are
+// equivalent to combining nvc_vhpi_handle_by_type_name,
+// nvc_vhpi_create_array_subtype, and nvc_vhpi_create.
+vhpiHandleT nvc_vhpi_create_std_logic(vhpiHandleT region, const char *name);
+vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
+                                             const char *name,
+                                             int left, int right);
+
 #ifdef __cplusplus
 }
 #endif
