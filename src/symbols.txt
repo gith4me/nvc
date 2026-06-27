@@ -116,6 +116,9 @@
   vhpi_scan;
   vhpi_vprintf;
 
+  # NVC-specific VHPI extensions
+  nvc_vhpi_create_signal;
+
   # Unit test
   global_func;
 };

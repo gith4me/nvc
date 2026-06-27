@@ -20,6 +20,7 @@
 
 #include "vhpi_ext_nvc.h"
 #include "vhpi_user.h"
+#include "vhpi_nvc.h"
 
 #define fail_if(x)                                                      \
    if (x) vhpi_assert(vhpiFailure, "assertion '%s' failed at %s:%d",    \

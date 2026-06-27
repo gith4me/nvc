@@ -38,20 +38,20 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    vhpiHandleT type = vhpi_handle(vhpiType, x);
    check_handle(type);
 
-   // Create a brand new signal with the same type
-   new_sig = vhpi_create(vhpiSigDeclK, root, type);
+   // Create a brand new signal with the same type and an explicit name
+   new_sig = nvc_vhpi_create_signal(root, type, "created_sig");
    check_handle(new_sig);
 
    fail_unless(vhpi_get(vhpiKindP, new_sig) == vhpiSigDeclK);
 
    const vhpiCharT *name = vhpi_get_str(vhpiNameP, new_sig);
    check_error();
-   fail_if(name == NULL);
+   check_string(name, "CREATED_SIG");
    vhpi_printf("created signal name is %s", name);
 
    // The new signal should be discoverable by name from the region it
    // was created in
-   vhpiHandleT found = vhpi_handle_by_name((char *)name, root);
+   vhpiHandleT found = vhpi_handle_by_name("created_sig", root);
    check_handle(found);
 
    // The initial value should be zero

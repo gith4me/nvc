@@ -4092,7 +4092,8 @@ int vhpi_control(vhpiSimControlT command, ...)
    }
 }
 
-static tree_t vhpi_synth_signal_tree(vhpi_context_t *c, type_t type)
+static tree_t vhpi_synth_signal_tree(vhpi_context_t *c, type_t type,
+                                     const char *name)
 {
    // Synthesise a signal declaration tree for a signal created through
    // the VHPI interface.  These trees are allocated in a dedicated
@@ -4106,8 +4107,12 @@ static tree_t vhpi_synth_signal_tree(vhpi_context_t *c, type_t type)
 
    tree_t t = tree_new(T_SIGNAL_DECL);
    tree_set_loc(t, &LOC_INVALID);
-   tree_set_ident(t, ident_sprintf("_vhpi_signal_%u", c->created++));
    tree_set_type(t, type);
+
+   if (name != NULL)
+      tree_set_ident(t, ident_new(name));
+   else
+      tree_set_ident(t, ident_sprintf("_vhpi_signal_%u", c->created++));
 
    return t;
 }
@@ -4148,6 +4153,86 @@ static void *vhpi_signal_storage(type_t type, rt_signal_t *s)
    return mem;
 }
 
+static vhpiHandleT vhpi_create_signal(vhpiHandleT region_h, vhpiHandleT type_h,
+                                      const char *name)
+{
+   c_vhpiObject *h1 = from_handle(region_h);
+   if (h1 == NULL)
+      return NULL;
+
+   c_abstractRegion *region = is_abstractRegion(h1);
+   if (region == NULL) {
+      vhpi_error(vhpiError, obj_loc(h1), "region argument when creating a "
+                 "signal must be a region");
+      return NULL;
+   }
+
+   c_vhpiObject *h2 = from_handle(type_h);
+   if (h2 == NULL)
+      return NULL;
+
+   c_typeDecl *td = is_typeDecl(h2);
+   if (td == NULL) {
+      vhpi_error(vhpiError, obj_loc(h2), "type argument when creating a "
+                 "signal must be a type declaration");
+      return NULL;
+   }
+
+   type_t type = td->type;
+
+   if (td->IsUnconstrained) {
+      vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                 "unconstrained type %pT", type);
+      return NULL;
+   }
+   else if (!type_is_homogeneous(type)) {
+      vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                 "composite type %pT", type);
+      return NULL;
+   }
+   else if (type_is_array(type) && !type_const_bounds(type)) {
+      vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                 "non-static bounds of type %pT", type);
+      return NULL;
+   }
+
+   vhpi_context_t *c = vhpi_context();
+
+   rt_scope_t *scope = find_scope(c->model, region->object.tree);
+   if (scope == NULL) {
+      vhpi_error(vhpiError, obj_loc(h1), "cannot find scope object "
+                 "for %s", vhpi_get_name(h1));
+      return NULL;
+   }
+
+   sig_flags_t flags = 0;
+   switch (is_well_known(type_ident(type_base_recur(type)))) {
+   case W_IEEE_LOGIC:
+   case W_IEEE_ULOGIC:
+   case W_IEEE_LOGIC_VECTOR:
+   case W_IEEE_ULOGIC_VECTOR:
+      flags |= SIG_F_STD_LOGIC;
+      break;
+   default:
+      break;
+   }
+
+   tree_t where = vhpi_synth_signal_tree(c, type, name);
+
+   rt_signal_t *s = create_signal(c->model, scope, where,
+                                  type_width(type), type_byte_width(type),
+                                  flags, NULL);
+
+   c_sigDecl *sd = new_object(sizeof(c_sigDecl), vhpiSigDeclK);
+   init_objDecl(&(sd->objDecl), where, region);
+   sd->objDecl.Type    = td;
+   sd->objDecl.storage = vhpi_signal_storage(type, s);
+
+   region_add_decl(region, &(sd->objDecl.decl.object));
+
+   return user_handle_for(&(sd->objDecl.decl.object));
+}
+
 DLLEXPORT
 vhpiHandleT vhpi_create(vhpiClassKindT kind,
                         vhpiHandleT handle1,
@@ -4160,88 +4245,27 @@ vhpiHandleT vhpi_create(vhpiClassKindT kind,
 
    switch (kind) {
    case vhpiSigDeclK:
-      {
-         c_vhpiObject *h1 = from_handle(handle1);
-         if (h1 == NULL)
-            return NULL;
-
-         c_abstractRegion *region = is_abstractRegion(h1);
-         if (region == NULL) {
-            vhpi_error(vhpiError, obj_loc(h1), "first argument to vhpi_create "
-                       "must be a region when creating a signal");
-            return NULL;
-         }
-
-         c_vhpiObject *h2 = from_handle(handle2);
-         if (h2 == NULL)
-            return NULL;
-
-         c_typeDecl *td = is_typeDecl(h2);
-         if (td == NULL) {
-            vhpi_error(vhpiError, obj_loc(h2), "second argument to vhpi_create "
-                       "must be a type declaration when creating a signal");
-            return NULL;
-         }
-
-         type_t type = td->type;
-
-         if (td->IsUnconstrained) {
-            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
-                       "unconstrained type %pT", type);
-            return NULL;
-         }
-         else if (!type_is_homogeneous(type)) {
-            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
-                       "composite type %pT", type);
-            return NULL;
-         }
-         else if (type_is_array(type) && !type_const_bounds(type)) {
-            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
-                       "non-static bounds of type %pT", type);
-            return NULL;
-         }
-
-         vhpi_context_t *c = vhpi_context();
-
-         rt_scope_t *scope = find_scope(c->model, region->object.tree);
-         if (scope == NULL) {
-            vhpi_error(vhpiError, obj_loc(h1), "cannot find scope object "
-                       "for %s", vhpi_get_name(h1));
-            return NULL;
-         }
-
-         sig_flags_t flags = 0;
-         switch (is_well_known(type_ident(type_base_recur(type)))) {
-         case W_IEEE_LOGIC:
-         case W_IEEE_ULOGIC:
-         case W_IEEE_LOGIC_VECTOR:
-         case W_IEEE_ULOGIC_VECTOR:
-            flags |= SIG_F_STD_LOGIC;
-            break;
-         default:
-            break;
-         }
-
-         tree_t where = vhpi_synth_signal_tree(c, type);
-
-         rt_signal_t *s = create_signal(c->model, scope, where,
-                                        type_width(type), type_byte_width(type),
-                                        flags, NULL);
-
-         c_sigDecl *sd = new_object(sizeof(c_sigDecl), vhpiSigDeclK);
-         init_objDecl(&(sd->objDecl), where, region);
-         sd->objDecl.Type    = td;
-         sd->objDecl.storage = vhpi_signal_storage(type, s);
-
-         region_add_decl(region, &(sd->objDecl.decl.object));
-
-         return user_handle_for(&(sd->objDecl.decl.object));
-      }
+      // The standard vhpi_create has no way to pass a name so one is
+      // generated automatically.  Use nvc_vhpi_create_signal to choose
+      // the name explicitly.
+      return vhpi_create_signal(handle1, handle2, NULL);
    default:
       vhpi_error(vhpiError, NULL, "cannot create an object of class %s",
                  vhpi_class_str(kind));
       return NULL;
    }
+}
+
+DLLEXPORT
+vhpiHandleT nvc_vhpi_create_signal(vhpiHandleT region, vhpiHandleT type,
+                                   const char *name)
+{
+   vhpi_clear_error();
+
+   VHPI_TRACE("region=%s type=%s name=%s", handle_pp(region),
+              handle_pp(type), name);
+
+   return vhpi_create_signal(region, type, name);
 }
 
 DLLEXPORT
