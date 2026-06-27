@@ -1483,3 +1483,4 @@ vhpi502          wave,vhpi
 vhpi503          wave,vhpi
 vhpi504          vhpi
 vhpi505          vhpi
+vhpi506          vhpi
