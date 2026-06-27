@@ -4678,6 +4678,24 @@ vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
 }
 
 DLLEXPORT
+vhpiHandleT nvc_vhpi_create_record(vhpiHandleT region, const char *name,
+                                   int nfields, const char *const *field_names,
+                                   const vhpiHandleT *field_types)
+{
+   VHPI_TRACE("region=%s name=%s nfields=%d", handle_pp(region), name, nfields);
+
+   // Derive a type name from the signal name
+   char *type_name LOCAL = xasprintf("%s_type", name ?: "_vhpi_record");
+
+   vhpiHandleT type = nvc_vhpi_create_record_type(type_name, nfields,
+                                                  field_names, field_types);
+   if (type == NULL)
+      return NULL;
+
+   return nvc_vhpi_create(vhpiSigDeclK, region, type, name);
+}
+
+DLLEXPORT
 int vhpi_get_foreignf_info(vhpiHandleT handle, vhpiForeignDataT *foreignDatap)
 {
    vhpi_clear_error();

@@ -51,6 +51,16 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    check_error();
    fail_unless(value.value.enumv == vhpiU);
 
+   // The one-call record wrapper builds the type and signal together
+   vhpiHandleT rec2 = nvc_vhpi_create_record(root, "rec2", 2, fnames, ftypes);
+   check_handle(rec2);
+
+   vhpiHandleT fb2 = vhpi_handle_by_name("b", rec2);
+   check_handle(fb2);
+   fail_unless(vhpi_get(vhpiSizeP, fb2) == 8);
+   vhpi_release_handle(fb2);
+   vhpi_release_handle(rec2);
+
    vhpi_printf("constructed std_logic_vector and record signals OK");
 
    vhpi_release_handle(fa);

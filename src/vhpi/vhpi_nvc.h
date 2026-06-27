@@ -80,6 +80,13 @@ vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
                                              const char *name,
                                              int left, int right);
 
+// Create a record signal in one call, building the record type from the
+// given fields.  Equivalent to nvc_vhpi_create_record_type followed by
+// nvc_vhpi_create.
+vhpiHandleT nvc_vhpi_create_record(vhpiHandleT region, const char *name,
+                                   int nfields, const char *const *field_names,
+                                   const vhpiHandleT *field_types);
+
 #ifdef __cplusplus
 }
 #endif
