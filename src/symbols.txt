@@ -117,6 +117,7 @@
 
   # NVC-specific VHPI extensions
   nvc_vhpi_create;
+  nvc_vhpi_handle_by_type_name;
 
   # Unit test
   global_func;

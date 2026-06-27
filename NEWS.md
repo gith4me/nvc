@@ -1,8 +1,9 @@
 ## Unreleased changes
 - Added a new VHPI extension `nvc_vhpi_create` which allows plugins to
-  add new signals to the design from a callback such as
+  add new signals and regions to the design from a callback such as
   `vhpiCbStartOfSimulation`.  Scalar, array, and record signals are
-  supported and are included in waveform dumps.
+  supported and are included in waveform dumps.  The companion
+  `nvc_vhpi_handle_by_type_name` looks up a type handle by name.
 - Several other minor bugs were resolved (#1663).
 
 ## Version 1.23.0 - 2026-09-19

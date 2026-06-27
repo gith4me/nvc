@@ -66,6 +66,7 @@ void vhpi501_startup(void);
 void vhpi502_startup(void);
 void vhpi503_startup(void);
 void vhpi504_startup(void);
+void vhpi505_startup(void);
 void issue744_startup(void);
 void issue762_startup(void);
 void issue978_startup(void);

@@ -39,6 +39,15 @@ extern "C" {
 vhpiHandleT nvc_vhpi_create(vhpiClassKindT kind, vhpiHandleT handle1,
                             vhpiHandleT handle2, const char *name);
 
+// Look up a type declaration anywhere in the design by name and return
+// a handle to it.  This searches the top-level design unit and every
+// package the design depends on, including the standard and IEEE
+// packages.  The name may be simple (e.g. "std_logic") or qualified
+// (e.g. "ieee.std_logic_1164.std_logic").  Returns NULL if no matching
+// type is found.  Useful for obtaining a type handle to pass to
+// nvc_vhpi_create without needing an existing object of that type.
+vhpiHandleT nvc_vhpi_handle_by_type_name(const char *name);
+
 #ifdef __cplusplus
 }
 #endif

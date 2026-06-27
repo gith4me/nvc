@@ -4393,6 +4393,57 @@ vhpiHandleT nvc_vhpi_create(vhpiClassKindT kind,
    }
 }
 
+static vhpiHandleT find_type_in_region(c_abstractRegion *r, const char *name)
+{
+   vhpiObjectListT *decls = expand_lazy_list(&(r->object), &(r->Decls));
+   for (int i = 0; i < decls->count; i++) {
+      c_vhpiObject *o = decls->items[i];
+      if (is_typeDecl(o) != NULL && vhpi_name_cmp(o, name))
+         return user_handle_for(o);
+   }
+   return NULL;
+}
+
+DLLEXPORT
+vhpiHandleT nvc_vhpi_handle_by_type_name(const char *name)
+{
+   vhpi_clear_error();
+
+   VHPI_TRACE("name=%s", name);
+
+   vhpi_context_t *c = vhpi_context();
+
+   // Accept a qualified name such as IEEE.STD_LOGIC_1164.STD_LOGIC and
+   // match against the simple type name
+   const char *simple = name;
+   for (const char *p = name; *p; p++) {
+      if (*p == '.' || *p == ':')
+         simple = p + 1;
+   }
+
+   // Search any type declared in the top-level design unit first
+   if (c->root != NULL) {
+      vhpiHandleT h =
+         find_type_in_region(&(c->root->designInstUnit.region), simple);
+      if (h != NULL)
+         return h;
+   }
+
+   // Then search every package the design depends on, which includes the
+   // standard and any IEEE packages that are used
+   for (int i = 0; i < c->packages.count; i++) {
+      c_abstractRegion *r = is_abstractRegion(c->packages.items[i]);
+      if (r != NULL) {
+         vhpiHandleT h = find_type_in_region(r, simple);
+         if (h != NULL)
+            return h;
+      }
+   }
+
+   vhpi_error(vhpiError, NULL, "no type named %s found in the design", name);
+   return NULL;
+}
+
 DLLEXPORT
 int vhpi_get_foreignf_info(vhpiHandleT handle, vhpiForeignDataT *foreignDatap)
 {
