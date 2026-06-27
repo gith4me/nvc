@@ -1,0 +1,6 @@
+#0 vhpi502.created_rec.b[1:0] UU
+#0 vhpi502.created_rec.a u
+#0 vhpi502.r.b[1:0] UU
+#0 vhpi502.r.a u
+#1000000 vhpi502.created_rec.a 1
+#2000000 vhpi502.created_rec.a 0

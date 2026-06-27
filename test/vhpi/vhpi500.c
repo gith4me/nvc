@@ -39,7 +39,7 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    check_handle(type);
 
    // Create a brand new signal with the same type and an explicit name
-   new_sig = nvc_vhpi_create_signal(root, type, "created_sig");
+   new_sig = nvc_vhpi_create(vhpiSigDeclK, root, type, "created_sig");
    check_handle(new_sig);
 
    fail_unless(vhpi_get(vhpiKindP, new_sig) == vhpiSigDeclK);

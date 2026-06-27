@@ -1479,3 +1479,5 @@ elab42          normal,2008
 inertial1       normal,2008
 vhpi500          vhpi
 vhpi501          wave,vhpi
+vhpi502          wave,vhpi
+vhpi503          wave,vhpi

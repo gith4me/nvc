@@ -6,6 +6,7 @@
 #include <string.h>
 
 static vhpiHandleT created;
+static vhpiHandleT field_a;
 
 static void put_logic(vhpiHandleT h, vhpiEnumT v)
 {
@@ -34,6 +35,7 @@ static void register_after(uint64_t ns, void (*fn)(const vhpiCbDataT *))
 
 static void at_3ns(const vhpiCbDataT *cb_data)
 {
+   vhpi_release_handle(field_a);
    vhpi_release_handle(created);
    vhpi_control(vhpiFinish);
    check_error();
@@ -41,12 +43,12 @@ static void at_3ns(const vhpiCbDataT *cb_data)
 
 static void at_2ns(const vhpiCbDataT *cb_data)
 {
-   put_logic(created, vhpi0);
+   put_logic(field_a, vhpi0);
 }
 
 static void at_1ns(const vhpiCbDataT *cb_data)
 {
-   put_logic(created, vhpi1);
+   put_logic(field_a, vhpi1);
 }
 
 static void start_of_sim(const vhpiCbDataT *cb_data)
@@ -54,18 +56,37 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    vhpiHandleT root = vhpi_handle(vhpiRootInst, NULL);
    check_handle(root);
 
-   vhpiHandleT x = vhpi_handle_by_name("x", root);
-   check_handle(x);
+   vhpiHandleT r = vhpi_handle_by_name("r", root);
+   check_handle(r);
 
-   vhpiHandleT type = vhpi_handle(vhpiType, x);
+   vhpiHandleT type = vhpi_handle(vhpiType, r);
    check_handle(type);
 
-   // Create a new std_logic signal that will appear in the waveform
-   created = nvc_vhpi_create(vhpiSigDeclK, root, type, "created_sig");
+   // Create a new record signal that will appear in the waveform
+   created = nvc_vhpi_create(vhpiSigDeclK, root, type, "created_rec");
    check_handle(created);
 
+   fail_unless(vhpi_get(vhpiKindP, created) == vhpiSigDeclK);
+
+   // The fields of the new signal should be accessible by name
+   field_a = vhpi_handle_by_name("a", created);
+   check_handle(field_a);
+
+   vhpiHandleT field_b = vhpi_handle_by_name("b", created);
+   check_handle(field_b);
+   fail_unless(vhpi_get(vhpiSizeP, field_b) == 2);
+
+   // The initial value of the scalar field is 'U'
+   vhpiValueT value = {
+      .format = vhpiLogicVal
+   };
+   vhpi_get_value(field_a, &value);
+   check_error();
+   fail_unless(value.value.enumv == vhpiU);
+
+   vhpi_release_handle(field_b);
    vhpi_release_handle(type);
-   vhpi_release_handle(x);
+   vhpi_release_handle(r);
    vhpi_release_handle(root);
 
    register_after(1, at_1ns);
@@ -73,7 +94,7 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    register_after(3, at_3ns);
 }
 
-void vhpi501_startup(void)
+void vhpi502_startup(void)
 {
    vhpiCbDataT cb_data1 = {
       .reason = vhpiCbStartOfSimulation,

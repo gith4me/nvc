@@ -28,13 +28,16 @@ extern "C" {
 
 // NVC-specific extensions to the standard VHPI interface
 
-// Create a new signal of the given type in a region.  This is like
-// vhpi_create(vhpiSigDeclK, region, type) but additionally allows the
-// name of the new signal to be specified.  Returns a handle to the new
-// signal or NULL on error.  The type must be constrained and have a
-// scalar or homogeneous array type.
-vhpiHandleT nvc_vhpi_create_signal(vhpiHandleT region, vhpiHandleT type,
-                                   const char *name);
+// Create a new object in the design.  This is like the standard
+// vhpi_create but additionally allows a name to be specified.
+//
+// Currently only signals can be created: pass vhpiSigDeclK for kind,
+// a region for handle1, and a constrained type for handle2.  The type
+// may be a scalar, a homogeneous array, or a record whose fields are
+// themselves scalars, homogeneous arrays, or records.  Returns a handle
+// to the new object or NULL on error.
+vhpiHandleT nvc_vhpi_create(vhpiClassKindT kind, vhpiHandleT handle1,
+                            vhpiHandleT handle2, const char *name);
 
 #ifdef __cplusplus
 }

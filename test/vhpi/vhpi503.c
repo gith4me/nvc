@@ -60,10 +60,28 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    vhpiHandleT type = vhpi_handle(vhpiType, x);
    check_handle(type);
 
-   // Create a new std_logic signal that will appear in the waveform
-   created = nvc_vhpi_create(vhpiSigDeclK, root, type, "created_sig");
+   // Create a new region under the root instance
+   vhpiHandleT region = nvc_vhpi_create(vhpiBlockStmtK, root, NULL, "subregion");
+   check_handle(region);
+
+   fail_unless(vhpi_get(vhpiKindP, region) == vhpiBlockStmtK);
+
+   // The region should be discoverable by name from the root
+   vhpiHandleT found = vhpi_handle_by_name("subregion", root);
+   check_handle(found);
+
+   // Create a signal inside the new region
+   created = nvc_vhpi_create(vhpiSigDeclK, region, type, "created_sig");
    check_handle(created);
 
+   // It should be reachable through the hierarchical path
+   vhpiHandleT sig = vhpi_handle_by_name("subregion.created_sig", root);
+   check_handle(sig);
+   fail_unless(vhpi_compare_handles(sig, created));
+
+   vhpi_release_handle(sig);
+   vhpi_release_handle(found);
+   vhpi_release_handle(region);
    vhpi_release_handle(type);
    vhpi_release_handle(x);
    vhpi_release_handle(root);
@@ -73,7 +91,7 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    register_after(3, at_3ns);
 }
 
-void vhpi501_startup(void)
+void vhpi503_startup(void)
 {
    vhpiCbDataT cb_data1 = {
       .reason = vhpiCbStartOfSimulation,

@@ -4059,6 +4059,93 @@ void model_set_new_signal_cb(rt_model_t *m, rt_signal_fn_t fn, void *user)
    m->new_signal_ctx = user;
 }
 
+sig_flags_t signal_type_flags(type_t type)
+{
+   switch (is_well_known(type_ident(type_base_recur(type)))) {
+   case W_IEEE_LOGIC:
+   case W_IEEE_ULOGIC:
+   case W_IEEE_LOGIC_VECTOR:
+   case W_IEEE_ULOGIC_VECTOR:
+      return SIG_F_STD_LOGIC;
+   default:
+      return 0;
+   }
+}
+
+static rt_scope_t *create_signal_scope(rt_model_t *m, rt_scope_t *parent,
+                                       tree_t where, rt_scope_kind_t kind)
+{
+   // Mirror the scope naming performed by x_push_scope during normal
+   // elaboration
+   ident_t name;
+   if (parent->kind == SCOPE_ARRAY)
+      name = ident_sprintf("%s(%d)", istr(parent->name),
+                           parent->children.count);
+   else if (parent->kind == SCOPE_RECORD)
+      name = ident_prefix(parent->name, tree_ident(where), '.');
+   else
+      name = tree_ident(where);
+
+   rt_scope_t *s = xcalloc(sizeof(rt_scope_t));
+   s->where    = where;
+   s->kind     = kind;
+   s->parent   = parent;
+   s->name     = name;
+   s->privdata = MPTR_INVALID;
+
+   APUSH(parent->children, s);
+   return s;
+}
+
+rt_scope_t *create_region(rt_model_t *m, rt_scope_t *parent, tree_t where)
+{
+   // Create a new instance scope, for example a block region added by a
+   // VHPI plugin during elaboration
+
+   TRACE("create region %s in scope %s", istr(tree_ident(where)),
+         istr(parent->name));
+
+   rt_scope_t *s = xcalloc(sizeof(rt_scope_t));
+   s->where    = where;
+   s->kind     = SCOPE_INSTANCE;
+   s->parent   = parent;
+   s->name     = ident_prefix(parent->name, tree_ident(where), '.');
+   s->privdata = MPTR_INVALID;
+
+   APUSH(parent->children, s);
+   hash_put(m->scopes, where, s);
+
+   return s;
+}
+
+rt_scope_t *create_record_signal(rt_model_t *m, rt_scope_t *parent,
+                                 tree_t where, type_t type)
+{
+   // Recursively create a record signal as a sub-scope containing one
+   // signal per field, mirroring how records are elaborated normally.
+   // The caller must have checked every field is a scalar, homogeneous
+   // array, or nested record.
+
+   assert(type_is_record(type));
+
+   rt_scope_t *rec = create_signal_scope(m, parent, where, SCOPE_RECORD);
+
+   const int nfields = type_fields(type);
+   for (int i = 0; i < nfields; i++) {
+      tree_t f = type_field(type, i);
+      tree_t cons = type_constraint_for_field(type, f);
+      type_t ftype = tree_type(cons ?: f);
+
+      if (type_is_record(ftype))
+         create_record_signal(m, rec, f, ftype);
+      else
+         create_signal(m, rec, f, type_width(ftype), type_byte_width(ftype),
+                       signal_type_flags(ftype), NULL);
+   }
+
+   return rec;
+}
+
 void x_drive_signal(sig_shared_t *ss, uint32_t offset, int32_t count)
 {
    rt_signal_t *s = container_of(ss, rt_signal_t, shared);

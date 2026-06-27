@@ -46,7 +46,9 @@ lib_vhpi_test_so_SOURCES = \
 	test/vhpi/issue1616.c \
 	test/vhpi/issue1621.c \
 	test/vhpi/vhpi500.c \
-	test/vhpi/vhpi501.c
+	test/vhpi/vhpi501.c \
+	test/vhpi/vhpi502.c \
+	test/vhpi/vhpi503.c
 
 lib_vhpi_test_so_CFLAGS  = $(SHLIB_CFLAGS) -I$(top_srcdir)/src/vhpi $(AM_CFLAGS)
 lib_vhpi_test_so_LDFLAGS = $(SHLIB_LDFLAGS) $(AM_LDFLAGS)

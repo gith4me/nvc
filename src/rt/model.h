@@ -82,6 +82,10 @@ rt_scope_t *create_scope(rt_model_t *m, tree_t block, rt_scope_t *parent);
 rt_signal_t *create_signal(rt_model_t *m, rt_scope_t *scope, tree_t where,
                            unsigned count, unsigned size, sig_flags_t flags,
                            const void *values);
+rt_scope_t *create_record_signal(rt_model_t *m, rt_scope_t *parent,
+                                  tree_t where, type_t type);
+rt_scope_t *create_region(rt_model_t *m, rt_scope_t *parent, tree_t where);
+sig_flags_t signal_type_flags(type_t type);
 
 void get_instance_name(rt_scope_t *s, text_buf_t *tb);
 void get_path_name(rt_scope_t *s, text_buf_t *tb);

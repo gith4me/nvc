@@ -1273,8 +1273,18 @@ static void wave_new_signal_cb(rt_model_t *m, rt_signal_t *s, void *user)
       return;   // Dump already closed
 
    tree_t where = s->where;
-   if (where == NULL || tree_kind(where) != T_SIGNAL_DECL)
+   if (where == NULL)
       return;
+
+   // Record fields have a field declaration as their tree
+   switch (tree_kind(where)) {
+   case T_SIGNAL_DECL:
+   case T_FIELD_DECL:
+   case T_PORT_DECL:
+      break;
+   default:
+      return;
+   }
 
    rt_scope_t *scope = s->parent;
 
