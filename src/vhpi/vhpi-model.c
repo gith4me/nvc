@@ -554,7 +554,7 @@ typedef struct _vhpi_context {
    mem_pool_t      *pool;
    vhpiObjectListT  recycle;
    vhpiPhaseT       phase;
-   bool             have_arena;
+   tree_t           container;
    unsigned         created;
 } vhpi_context_t;
 
@@ -4092,18 +4092,28 @@ int vhpi_control(vhpiSimControlT command, ...)
    }
 }
 
+static void vhpi_ensure_arena(vhpi_context_t *c)
+{
+   // Objects created through the VHPI interface are allocated in a
+   // dedicated arena owned by the VHPI context as the design arenas are
+   // frozen once elaboration is complete.  The arena is rooted in a
+   // synthetic design unit so that its contents survive if it is later
+   // frozen to make way for a constructed type.
+
+   if (c->container == NULL) {
+      make_new_arena();
+
+      c->container = tree_new(T_ELAB);
+      tree_set_loc(c->container, &LOC_INVALID);
+      tree_set_ident(c->container,
+                     ident_sprintf("_vhpi_created_%u", c->created++));
+   }
+}
+
 static tree_t vhpi_synth_tree(vhpi_context_t *c, tree_kind_t kind,
                               const char *name, const char *prefix)
 {
-   // Synthesise a tree for an object created through the VHPI interface.
-   // These trees are allocated in a dedicated arena owned by the VHPI
-   // context as the design arenas are frozen once elaboration is
-   // complete.
-
-   if (!c->have_arena) {
-      make_new_arena();
-      c->have_arena = true;
-   }
+   vhpi_ensure_arena(c);
 
    tree_t t = tree_new(kind);
    tree_set_loc(t, &LOC_INVALID);
@@ -4113,7 +4123,28 @@ static tree_t vhpi_synth_tree(vhpi_context_t *c, tree_kind_t kind,
    else
       tree_set_ident(t, ident_sprintf("%s%u", prefix, c->created++));
 
+   if (kind == T_BLOCK)
+      tree_add_stmt(c->container, t);
+   else
+      tree_add_decl(c->container, t);
+
    return t;
+}
+
+static tree_t vhpi_begin_type(vhpi_context_t *c)
+{
+   // The layout of a type can only be computed once its arena is frozen
+   // so each constructed type is allocated in an arena of its own,
+   // rooted in a synthetic package, which the caller must freeze
+
+   make_new_arena();
+   c->container = NULL;
+
+   tree_t pack = tree_new(T_PACKAGE);
+   tree_set_loc(pack, &LOC_INVALID);
+   tree_set_ident(pack, ident_sprintf("_VHPI_TYPE_%u", c->created++));
+
+   return pack;
 }
 
 static tree_t vhpi_synth_signal_tree(vhpi_context_t *c, type_t type,
@@ -4442,6 +4473,159 @@ vhpiHandleT nvc_vhpi_handle_by_type_name(const char *name)
 
    vhpi_error(vhpiError, NULL, "no type named %s found in the design", name);
    return NULL;
+}
+
+static tree_t vhpi_make_int_lit(type_t type, int64_t value)
+{
+   tree_t lit = tree_new(T_LITERAL);
+   tree_set_subkind(lit, L_INT);
+   tree_set_ival(lit, value);
+   tree_set_loc(lit, &LOC_INVALID);
+   tree_set_type(lit, type);
+   return lit;
+}
+
+DLLEXPORT
+vhpiHandleT nvc_vhpi_create_array_subtype(vhpiHandleT base_type,
+                                          int left, int right)
+{
+   vhpi_clear_error();
+
+   VHPI_TRACE("base=%s left=%d right=%d", handle_pp(base_type), left, right);
+
+   c_vhpiObject *obj = from_handle(base_type);
+   if (obj == NULL)
+      return NULL;
+
+   c_typeDecl *td = is_typeDecl(obj);
+   if (td == NULL) {
+      vhpi_error(vhpiError, obj_loc(obj), "argument to "
+                 "nvc_vhpi_create_array_subtype must be a type declaration");
+      return NULL;
+   }
+
+   type_t base = td->type;
+   if (!type_is_array(base)) {
+      vhpi_error(vhpiError, obj_loc(obj), "type %pT is not an array type",
+                 base);
+      return NULL;
+   }
+
+   vhpi_context_t *c = vhpi_context();
+   tree_t pack = vhpi_begin_type(c);
+
+   type_t index = index_type_of(base, 0);
+
+   tree_t r = tree_new(T_RANGE);
+   tree_set_subkind(r, left >= right ? RANGE_DOWNTO : RANGE_TO);
+   tree_set_type(r, index);
+   tree_set_loc(r, &LOC_INVALID);
+   tree_set_left(r, vhpi_make_int_lit(index, left));
+   tree_set_right(r, vhpi_make_int_lit(index, right));
+
+   tree_t cons = tree_new(T_CONSTRAINT);
+   tree_set_subkind(cons, C_INDEX);
+   tree_add_range(cons, r);
+
+   // The subtype is anonymous (no identifier)
+   type_t sub = type_new(T_SUBTYPE);
+   type_set_base(sub, base);
+   type_set_constraint(sub, cons);
+
+   // Synthetic backing declaration for the subtype
+   tree_t where = tree_new(T_SUBTYPE_DECL);
+   tree_set_ident(where, ident_sprintf("_vhpi_subtype_%u", c->created++));
+   tree_set_type(where, sub);
+   tree_set_loc(where, &LOC_INVALID);
+
+   tree_add_decl(pack, where);
+   freeze_global_arena();
+
+   // Build the subtype declaration directly as there is no object to
+   // derive an anonymous subtype from
+   c_subTypeDecl *std = new_object(sizeof(c_subTypeDecl), vhpiSubtypeDeclK);
+   init_typeDecl(&(std->typeDecl), where, sub, td->decl.ImmRegion);
+
+   std->Size = vhpiUndefined;
+   std->IsAnonymous = true;
+   std->Constraints.fn = vhpi_lazy_constraints;
+
+   return user_handle_for(&(std->typeDecl.decl.object));
+}
+
+DLLEXPORT
+vhpiHandleT nvc_vhpi_create_record_type(const char *name, int nfields,
+                                        const char *const *field_names,
+                                        const vhpiHandleT *field_types)
+{
+   vhpi_clear_error();
+
+   VHPI_TRACE("name=%s nfields=%d", name, nfields);
+
+   if (name == NULL || nfields <= 0) {
+      vhpi_error(vhpiError, NULL, "a record type must have a name and at "
+                 "least one field");
+      return NULL;
+   }
+
+   c_typeDecl **ftds LOCAL = xmalloc_array(nfields, sizeof(c_typeDecl *));
+
+   for (int i = 0; i < nfields; i++) {
+      c_vhpiObject *o = from_handle(field_types[i]);
+      if (o == NULL)
+         return NULL;
+
+      if ((ftds[i] = is_typeDecl(o)) == NULL) {
+         vhpi_error(vhpiError, obj_loc(o), "field %s type must be a type "
+                    "declaration", field_names[i]);
+         return NULL;
+      }
+   }
+
+   vhpi_context_t *c = vhpi_context();
+   tree_t pack = vhpi_begin_type(c);
+
+   type_t rec = type_new(T_RECORD);
+   type_set_ident(rec, ident_new(name));
+
+   for (int i = 0; i < nfields; i++) {
+      tree_t f = tree_new(T_FIELD_DECL);
+      tree_set_ident(f, ident_new(field_names[i]));
+      tree_set_type(f, ftds[i]->type);
+      tree_set_pos(f, i);
+      tree_set_loc(f, &LOC_INVALID);
+
+      type_add_field(rec, f);
+   }
+
+   tree_t decl = tree_new(T_TYPE_DECL);
+   tree_set_ident(decl, ident_new(name));
+   tree_set_type(decl, rec);
+   tree_set_loc(decl, &LOC_INVALID);
+
+   tree_add_decl(pack, decl);
+   freeze_global_arena();
+
+   // The record type declaration is built from the synthetic package in
+   // the same way as for a type declared in the design
+   c_typeDecl *td = find_typeDecl(rec, NULL);
+
+   c_recordTypeDecl *rtd = is_recordTypeDecl(&(td->decl.object));
+   assert(rtd != NULL);
+
+   // The types of the fields are already known and may not be visible
+   // from the synthetic package
+   vhpiObjectListT *elems =
+      expand_lazy_list(&(td->decl.object), &(rtd->RecordElems));
+   assert(elems->count == nfields);
+
+   for (int i = 0; i < nfields; i++) {
+      c_elemDecl *ed = is_elemDecl(elems->items[i]);
+      assert(ed != NULL);
+      ed->Type = ftds[i];
+   }
+
+   return user_handle_for(&(td->decl.object));
 }
 
 DLLEXPORT

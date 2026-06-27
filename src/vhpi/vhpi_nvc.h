@@ -48,6 +48,21 @@ vhpiHandleT nvc_vhpi_create(vhpiClassKindT kind, vhpiHandleT handle1,
 // nvc_vhpi_create without needing an existing object of that type.
 vhpiHandleT nvc_vhpi_handle_by_type_name(const char *name);
 
+// Construct a constrained array subtype from an unconstrained array type
+// (for example std_logic_vector) and the given bounds.  If left >= right
+// the range is descending (downto) otherwise ascending (to).  Returns a
+// type handle suitable for nvc_vhpi_create.
+vhpiHandleT nvc_vhpi_create_array_subtype(vhpiHandleT base_type,
+                                          int left, int right);
+
+// Construct a new record type with the given name and fields.  The
+// field_names and field_types arrays must each have nfields entries; each
+// field type is a type handle.  Returns a type handle suitable for
+// nvc_vhpi_create.
+vhpiHandleT nvc_vhpi_create_record_type(const char *name, int nfields,
+                                        const char *const *field_names,
+                                        const vhpiHandleT *field_types);
+
 #ifdef __cplusplus
 }
 #endif
