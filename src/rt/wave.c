@@ -181,6 +181,8 @@ static void fst_close(rt_model_t *m, void *arg)
       wd->tmpfst = NULL;
    }
 
+   model_set_new_signal_cb(m, NULL, NULL);
+
    wd->fst_ctx = NULL;
    wd->model   = NULL;
 }
@@ -1235,6 +1237,70 @@ static void fst_walk_packages(wave_dumper_t *wd)
    }
 }
 
+static void fst_enter_scope_path(wave_dumper_t *wd, rt_scope_t *scope,
+                                 text_buf_t *tb)
+{
+   if (scope == NULL || scope->kind == SCOPE_ROOT)
+      return;
+
+   fst_enter_scope_path(wd, scope->parent, tb);
+
+   enum fstScopeType st = FST_ST_VHDL_ARCHITECTURE;
+   switch (tree_kind(scope->where)) {
+   case T_BLOCK:        st = FST_ST_VHDL_BLOCK; break;
+   case T_FOR_GENERATE: st = FST_ST_VHDL_FOR_GENERATE; break;
+   case T_IF_GENERATE:  st = FST_ST_VHDL_IF_GENERATE; break;
+   case T_PACKAGE:      st = FST_ST_VHDL_PACKAGE; break;
+   default: break;
+   }
+
+   tb_rewind(tb);
+   tb_istr(tb, tree_ident(scope->where));
+   tb_downcase(tb);
+
+   fstWriterSetScope(wd->fst_ctx, st, tb_get(tb), "");
+}
+
+static void wave_new_signal_cb(rt_model_t *m, rt_signal_t *s, void *user)
+{
+   // Called by the model when a signal is added after elaboration, for
+   // example by a VHPI plugin.  Create the corresponding FST variable so
+   // that it appears in the waveform dump.
+
+   wave_dumper_t *wd = user;
+
+   if (wd->fst_ctx == NULL)
+      return;   // Dump already closed
+
+   tree_t where = s->where;
+   if (where == NULL || tree_kind(where) != T_SIGNAL_DECL)
+      return;
+
+   rt_scope_t *scope = s->parent;
+
+   int depth = 0;
+   for (rt_scope_t *it = scope; it != NULL && it->kind != SCOPE_ROOT;
+        it = it->parent)
+      depth++;
+
+   LOCAL_TEXT_BUF tb = tb_new();
+   fst_enter_scope_path(wd, scope, tb);
+
+   const int before = wd->dumped.count;
+   fst_process_signal(wd, scope, where, tree_type(where), tb);
+
+   for (int i = 0; i < depth; i++)
+      fstWriterSetUpscope(wd->fst_ctx);
+
+   // Emit the current value of the new signal so the waveform has an
+   // initial value at the time it was created
+   const uint64_t now = model_now(m, NULL);
+   for (int i = before; i < wd->dumped.count; i++) {
+      fst_data_t *data = wd->dumped.items[i];
+      fst_event_cb(now, data->signal, data->watch, data);
+   }
+}
+
 void wave_dumper_restart(wave_dumper_t *wd, rt_model_t *m, jit_t *jit)
 {
    wd->last_time = UINT64_MAX;
@@ -1260,6 +1326,10 @@ void wave_dumper_restart(wave_dumper_t *wd, rt_model_t *m, jit_t *jit)
       fst_data_t *data = wd->dumped.items[i];
       fst_event_cb(0, data->signal, data->watch, data);
    }
+
+   // Pick up any signals added after elaboration, for example by a VHPI
+   // plugin from a vhpiCbStartOfSimulation callback
+   model_set_new_signal_cb(m, wave_new_signal_cb, wd);
 
    model_set_phase_cb(m, END_OF_SIMULATION, fst_close, wd);
 }

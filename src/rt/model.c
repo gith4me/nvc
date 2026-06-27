@@ -132,6 +132,8 @@ typedef struct _rt_model {
    heap_t            *driving_heap;
    heap_t            *effective_heap;
    rt_callback_t     *phase_cbs[END_OF_SIMULATION + 1];
+   rt_signal_fn_t     new_signal_fn;
+   void              *new_signal_ctx;
    cover_data_t      *cover;
    nvc_rusage_t       ready_rusage;
    nvc_lock_t         memlock;
@@ -4043,7 +4045,18 @@ rt_signal_t *create_signal(rt_model_t *m, rt_scope_t *scope, tree_t where,
       memcpy(driving, values, s->shared.size);
    }
 
+   // Notify any observer such as the waveform dumper that a new signal
+   // has been added to the model
+   if (m->new_signal_fn != NULL)
+      (*m->new_signal_fn)(m, s, m->new_signal_ctx);
+
    return s;
+}
+
+void model_set_new_signal_cb(rt_model_t *m, rt_signal_fn_t fn, void *user)
+{
+   m->new_signal_fn  = fn;
+   m->new_signal_ctx = user;
 }
 
 void x_drive_signal(sig_shared_t *ss, uint32_t offset, int32_t count)

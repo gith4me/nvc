@@ -55,6 +55,7 @@ rt_watch_t *watch_new(rt_model_t *m, sig_event_fn_t fn, void *user,
                       watch_kind_t kind, unsigned slots);
 void watch_free(rt_model_t *m, rt_watch_t *w);
 
+void model_set_new_signal_cb(rt_model_t *m, rt_signal_fn_t fn, void *user);
 void model_set_phase_cb(rt_model_t *m, model_phase_t phase, rt_event_fn_t fn,
                         void *user);
 void model_set_event_cb(rt_model_t *m, rt_signal_t *s, int offset, int count,
