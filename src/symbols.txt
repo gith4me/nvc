@@ -127,6 +127,7 @@
   nvc_vhpi_create_natural;
   nvc_vhpi_create_positive;
   nvc_vhpi_create_record;
+  nvc_vhpi_create_region;
   nvc_vhpi_create_sfixed;
   nvc_vhpi_create_real;
   nvc_vhpi_create_std_logic;

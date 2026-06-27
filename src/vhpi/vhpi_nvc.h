@@ -97,6 +97,10 @@ vhpiHandleT nvc_vhpi_create_record(vhpiHandleT region, const char *name,
                                    int nfields, const char *const *field_names,
                                    const vhpiHandleT *field_types);
 
+// Create a new sub-region under the given parent region.  Equivalent to
+// nvc_vhpi_create(vhpiBlockStmtK, parent, NULL, name).
+vhpiHandleT nvc_vhpi_create_region(vhpiHandleT parent, const char *name);
+
 #ifdef __cplusplus
 }
 #endif

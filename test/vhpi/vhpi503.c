@@ -61,7 +61,7 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    check_handle(type);
 
    // Create a new region under the root instance
-   vhpiHandleT region = nvc_vhpi_create(vhpiBlockStmtK, root, NULL, "subregion");
+   vhpiHandleT region = nvc_vhpi_create_region(root, "subregion");
    check_handle(region);
 
    fail_unless(vhpi_get(vhpiKindP, region) == vhpiBlockStmtK);

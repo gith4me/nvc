@@ -4711,6 +4711,14 @@ vhpiHandleT nvc_vhpi_create_record(vhpiHandleT region, const char *name,
 }
 
 DLLEXPORT
+vhpiHandleT nvc_vhpi_create_region(vhpiHandleT parent, const char *name)
+{
+   VHPI_TRACE("parent=%s name=%s", handle_pp(parent), name);
+
+   return nvc_vhpi_create(vhpiBlockStmtK, parent, NULL, name);
+}
+
+DLLEXPORT
 int vhpi_get_foreignf_info(vhpiHandleT handle, vhpiForeignDataT *foreignDatap)
 {
    vhpi_clear_error();
