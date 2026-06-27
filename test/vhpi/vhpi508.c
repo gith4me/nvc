@@ -36,6 +36,21 @@ static void start_of_sim(const vhpiCbDataT *cb_data)
    check_handle(slv);
    fail_unless(vhpi_get(vhpiSizeP, slv) == 4);
 
+   // The other scalar convenience wrappers
+   vhpiHandleT b = nvc_vhpi_create_boolean(root, "b");
+   check_handle(b);
+   vhpiHandleT iv = nvc_vhpi_create_integer(root, "iv");
+   check_handle(iv);
+   vhpiHandleT rv = nvc_vhpi_create_real(root, "rv");
+   check_handle(rv);
+   vhpiHandleT tv = nvc_vhpi_create_time(root, "tv");
+   check_handle(tv);
+
+   vhpi_release_handle(b);
+   vhpi_release_handle(iv);
+   vhpi_release_handle(rv);
+   vhpi_release_handle(tv);
+
    // The scalar starts at 'U'
    vhpiValueT value = {
       .format = vhpiLogicVal

@@ -4628,17 +4628,35 @@ vhpiHandleT nvc_vhpi_create_record_type(const char *name, int nfields,
    return user_handle_for(&(td->decl.object));
 }
 
-DLLEXPORT
-vhpiHandleT nvc_vhpi_create_std_logic(vhpiHandleT region, const char *name)
+static vhpiHandleT vhpi_create_scalar_signal(vhpiHandleT region,
+                                             const char *name,
+                                             const char *type_name)
 {
-   VHPI_TRACE("region=%s name=%s", handle_pp(region), name);
-
-   vhpiHandleT type = nvc_vhpi_handle_by_type_name("std_logic");
+   vhpiHandleT type = nvc_vhpi_handle_by_type_name(type_name);
    if (type == NULL)
       return NULL;
 
    return nvc_vhpi_create(vhpiSigDeclK, region, type, name);
 }
+
+#define DEFINE_CREATE_SCALAR(suffix, typename)                          \
+   DLLEXPORT                                                            \
+   vhpiHandleT nvc_vhpi_create_##suffix(vhpiHandleT region,             \
+                                        const char *name)               \
+   {                                                                    \
+      VHPI_TRACE("region=%s name=%s", handle_pp(region), name);         \
+      return vhpi_create_scalar_signal(region, name, typename);         \
+   }
+
+DEFINE_CREATE_SCALAR(std_logic, "std_logic")
+DEFINE_CREATE_SCALAR(boolean,   "boolean")
+DEFINE_CREATE_SCALAR(bit,       "bit")
+DEFINE_CREATE_SCALAR(character, "character")
+DEFINE_CREATE_SCALAR(integer,   "integer")
+DEFINE_CREATE_SCALAR(natural,   "natural")
+DEFINE_CREATE_SCALAR(positive,  "positive")
+DEFINE_CREATE_SCALAR(real,      "real")
+DEFINE_CREATE_SCALAR(time,      "time")
 
 DLLEXPORT
 vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
