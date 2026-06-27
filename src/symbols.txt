@@ -120,16 +120,20 @@
   nvc_vhpi_create_array_subtype;
   nvc_vhpi_create_record_type;
   nvc_vhpi_create_bit;
+  nvc_vhpi_create_bit_vector;
   nvc_vhpi_create_boolean;
   nvc_vhpi_create_character;
   nvc_vhpi_create_integer;
   nvc_vhpi_create_natural;
   nvc_vhpi_create_positive;
   nvc_vhpi_create_record;
+  nvc_vhpi_create_sfixed;
   nvc_vhpi_create_real;
   nvc_vhpi_create_std_logic;
   nvc_vhpi_create_std_logic_vector;
+  nvc_vhpi_create_string;
   nvc_vhpi_create_time;
+  nvc_vhpi_create_ufixed;
   nvc_vhpi_handle_by_type_name;
 
   # Unit test

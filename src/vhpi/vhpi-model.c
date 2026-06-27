@@ -4658,15 +4658,12 @@ DEFINE_CREATE_SCALAR(positive,  "positive")
 DEFINE_CREATE_SCALAR(real,      "real")
 DEFINE_CREATE_SCALAR(time,      "time")
 
-DLLEXPORT
-vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
-                                             const char *name,
-                                             int left, int right)
+static vhpiHandleT vhpi_create_array_signal(vhpiHandleT region,
+                                            const char *name,
+                                            const char *type_name,
+                                            int left, int right)
 {
-   VHPI_TRACE("region=%s name=%s left=%d right=%d", handle_pp(region),
-              name, left, right);
-
-   vhpiHandleT base = nvc_vhpi_handle_by_type_name("std_logic_vector");
+   vhpiHandleT base = nvc_vhpi_handle_by_type_name(type_name);
    if (base == NULL)
       return NULL;
 
@@ -4676,6 +4673,24 @@ vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
 
    return nvc_vhpi_create(vhpiSigDeclK, region, type, name);
 }
+
+#define DEFINE_CREATE_ARRAY(suffix, typename)                           \
+   DLLEXPORT                                                            \
+   vhpiHandleT nvc_vhpi_create_##suffix(vhpiHandleT region,             \
+                                        const char *name,               \
+                                        int left, int right)            \
+   {                                                                    \
+      VHPI_TRACE("region=%s name=%s left=%d right=%d",                  \
+                 handle_pp(region), name, left, right);                 \
+      return vhpi_create_array_signal(region, name, typename,           \
+                                      left, right);                     \
+   }
+
+DEFINE_CREATE_ARRAY(std_logic_vector, "std_logic_vector")
+DEFINE_CREATE_ARRAY(bit_vector,       "bit_vector")
+DEFINE_CREATE_ARRAY(string,           "string")
+DEFINE_CREATE_ARRAY(ufixed,           "ufixed")
+DEFINE_CREATE_ARRAY(sfixed,           "sfixed")
 
 DLLEXPORT
 vhpiHandleT nvc_vhpi_create_record(vhpiHandleT region, const char *name,

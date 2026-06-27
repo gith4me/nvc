@@ -79,6 +79,16 @@ vhpiHandleT nvc_vhpi_create_time(vhpiHandleT region, const char *name);
 vhpiHandleT nvc_vhpi_create_std_logic_vector(vhpiHandleT region,
                                              const char *name,
                                              int left, int right);
+vhpiHandleT nvc_vhpi_create_bit_vector(vhpiHandleT region, const char *name,
+                                       int left, int right);
+vhpiHandleT nvc_vhpi_create_string(vhpiHandleT region, const char *name,
+                                   int left, int right);
+// Fixed point types from ieee.fixed_pkg.  The bounds may be negative,
+// for example nvc_vhpi_create_ufixed(region, "x", 3, -4).
+vhpiHandleT nvc_vhpi_create_ufixed(vhpiHandleT region, const char *name,
+                                   int left, int right);
+vhpiHandleT nvc_vhpi_create_sfixed(vhpiHandleT region, const char *name,
+                                   int left, int right);
 
 // Create a record signal in one call, building the record type from the
 // given fields.  Equivalent to nvc_vhpi_create_record_type followed by
