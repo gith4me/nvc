@@ -20,10 +20,12 @@
 #include "common.h"
 #include "diag.h"
 #include "hash.h"
+#include "ident.h"
 #include "jit/jit-ffi.h"
 #include "jit/jit-layout.h"
 #include "jit/jit.h"
 #include "lib.h"
+#include "object.h"
 #include "option.h"
 #include "printf.h"
 #include "rt/model.h"
@@ -251,6 +253,7 @@ typedef struct {
    vhpiLazyListT    IndexedNames;
    vhpiLazyListT    SelectedNames;
    vhpiStaticnessT  Staticness;
+   void            *storage;
 } c_objDecl;
 
 typedef struct {
@@ -551,6 +554,8 @@ typedef struct _vhpi_context {
    mem_pool_t      *pool;
    vhpiObjectListT  recycle;
    vhpiPhaseT       phase;
+   bool             have_arena;
+   unsigned         created;
 } vhpi_context_t;
 
 typedef enum {
@@ -2068,7 +2073,12 @@ static vhpi_ptr_t vhpi_get_ptr(c_vhpiObject *obj)
    }
 
    c_objDecl *od = is_objDecl(obj);
-   if (od != NULL) {
+   if (od != NULL && od->storage != NULL) {
+      // Created through VHPI so has no variable in the region's frame
+      const jit_layout_t *l = vhpi_get_layout(obj);
+      return vhpi_ptr_from_layout(l, od->storage);
+   }
+   else if (od != NULL) {
       vhpi_ptr_t ctx = vhpi_get_ptr(&(od->decl.ImmRegion->object));
       if (ctx.kind == PTR_NULL)
          return (vhpi_ptr_t){};
@@ -4082,6 +4092,62 @@ int vhpi_control(vhpiSimControlT command, ...)
    }
 }
 
+static tree_t vhpi_synth_signal_tree(vhpi_context_t *c, type_t type)
+{
+   // Synthesise a signal declaration tree for a signal created through
+   // the VHPI interface.  These trees are allocated in a dedicated
+   // arena owned by the VHPI context as the design arenas are frozen
+   // once elaboration is complete.
+
+   if (!c->have_arena) {
+      make_new_arena();
+      c->have_arena = true;
+   }
+
+   tree_t t = tree_new(T_SIGNAL_DECL);
+   tree_set_loc(t, &LOC_INVALID);
+   tree_set_ident(t, ident_sprintf("_vhpi_signal_%u", c->created++));
+   tree_set_type(t, type);
+
+   return t;
+}
+
+static void region_add_decl(c_abstractRegion *region, c_vhpiObject *obj)
+{
+   // Append a dynamically created declaration to the region so that it
+   // is visible to subsequent iteration over vhpiDecls
+
+   vhpiObjectListT *l = expand_lazy_list(&(region->object), &(region->Decls));
+
+   c_vhpiObject **items =
+      pool_malloc_array(vhpi_context()->pool, l->count + 1, sizeof(c_vhpiObject *));
+   if (l->count > 0)
+      memcpy(items, l->items, l->count * sizeof(c_vhpiObject *));
+
+   items[l->count] = obj;
+
+   l->items = items;
+   l->limit = l->count + 1;
+   l->count++;
+}
+
+static void *vhpi_signal_storage(type_t type, rt_signal_t *s)
+{
+   // A signal created through the VHPI interface has no variable in the
+   // frame of its region so build a private copy of the signal layout
+   // for vhpi_get_ptr to use instead
+
+   const jit_layout_t *l = signal_layout_of(type);
+   void *mem = pool_calloc(vhpi_context()->pool, l->size);
+
+   for (int i = 0; i < l->nparts; i++) {
+      if (l->parts[i].class == LC_SIGNAL)
+         *(sig_shared_t **)(mem + l->parts[i].offset) = &(s->shared);
+   }
+
+   return mem;
+}
+
 DLLEXPORT
 vhpiHandleT vhpi_create(vhpiClassKindT kind,
                         vhpiHandleT handle1,
@@ -4092,7 +4158,90 @@ vhpiHandleT vhpi_create(vhpiClassKindT kind,
    VHPI_TRACE("kind=%s handle1=%s handle2=%s", vhpi_class_str(kind),
               handle_pp(handle1), handle_pp(handle2));
 
-   VHPI_MISSING;
+   switch (kind) {
+   case vhpiSigDeclK:
+      {
+         c_vhpiObject *h1 = from_handle(handle1);
+         if (h1 == NULL)
+            return NULL;
+
+         c_abstractRegion *region = is_abstractRegion(h1);
+         if (region == NULL) {
+            vhpi_error(vhpiError, obj_loc(h1), "first argument to vhpi_create "
+                       "must be a region when creating a signal");
+            return NULL;
+         }
+
+         c_vhpiObject *h2 = from_handle(handle2);
+         if (h2 == NULL)
+            return NULL;
+
+         c_typeDecl *td = is_typeDecl(h2);
+         if (td == NULL) {
+            vhpi_error(vhpiError, obj_loc(h2), "second argument to vhpi_create "
+                       "must be a type declaration when creating a signal");
+            return NULL;
+         }
+
+         type_t type = td->type;
+
+         if (td->IsUnconstrained) {
+            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                       "unconstrained type %pT", type);
+            return NULL;
+         }
+         else if (!type_is_homogeneous(type)) {
+            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                       "composite type %pT", type);
+            return NULL;
+         }
+         else if (type_is_array(type) && !type_const_bounds(type)) {
+            vhpi_error(vhpiError, obj_loc(h2), "cannot create a signal with "
+                       "non-static bounds of type %pT", type);
+            return NULL;
+         }
+
+         vhpi_context_t *c = vhpi_context();
+
+         rt_scope_t *scope = find_scope(c->model, region->object.tree);
+         if (scope == NULL) {
+            vhpi_error(vhpiError, obj_loc(h1), "cannot find scope object "
+                       "for %s", vhpi_get_name(h1));
+            return NULL;
+         }
+
+         sig_flags_t flags = 0;
+         switch (is_well_known(type_ident(type_base_recur(type)))) {
+         case W_IEEE_LOGIC:
+         case W_IEEE_ULOGIC:
+         case W_IEEE_LOGIC_VECTOR:
+         case W_IEEE_ULOGIC_VECTOR:
+            flags |= SIG_F_STD_LOGIC;
+            break;
+         default:
+            break;
+         }
+
+         tree_t where = vhpi_synth_signal_tree(c, type);
+
+         rt_signal_t *s = create_signal(c->model, scope, where,
+                                        type_width(type), type_byte_width(type),
+                                        flags, NULL);
+
+         c_sigDecl *sd = new_object(sizeof(c_sigDecl), vhpiSigDeclK);
+         init_objDecl(&(sd->objDecl), where, region);
+         sd->objDecl.Type    = td;
+         sd->objDecl.storage = vhpi_signal_storage(type, s);
+
+         region_add_decl(region, &(sd->objDecl.decl.object));
+
+         return user_handle_for(&(sd->objDecl.decl.object));
+      }
+   default:
+      vhpi_error(vhpiError, NULL, "cannot create an object of class %s",
+                 vhpi_class_str(kind));
+      return NULL;
+   }
 }
 
 DLLEXPORT

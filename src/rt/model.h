@@ -78,6 +78,9 @@ rt_signal_t *find_signal(rt_scope_t *scope, tree_t decl, uint32_t *offset);
 rt_proc_t *find_proc(rt_scope_t *scope, tree_t proc);
 bool is_signal_scope(rt_scope_t *scope);
 rt_scope_t *create_scope(rt_model_t *m, tree_t block, rt_scope_t *parent);
+rt_signal_t *create_signal(rt_model_t *m, rt_scope_t *scope, tree_t where,
+                           unsigned count, unsigned size, sig_flags_t flags,
+                           const void *values);
 
 void get_instance_name(rt_scope_t *s, text_buf_t *tb);
 void get_path_name(rt_scope_t *s, text_buf_t *tb);

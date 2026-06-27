@@ -1,4 +1,6 @@
 ## Unreleased changes
+- Implemented `vhpi_create` which allows VHPI plugins to add new signals
+  to the design from a callback such as `vhpiCbStartOfSimulation`.
 - Several other minor bugs were resolved (#1663).
 
 ## Version 1.23.0 - 2026-09-19

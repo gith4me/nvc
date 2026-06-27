@@ -90,6 +90,7 @@
   vhpi_check_error;
   vhpi_compare_handles;
   vhpi_control;
+  vhpi_create;
   vhpi_disable_cb;
   vhpi_enable_cb;
   vhpi_get;

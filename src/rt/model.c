@@ -1688,12 +1688,10 @@ static inline rt_nexus_t *split_nexus(rt_model_t *m, rt_signal_t *s,
    return split_nexus_slow(m, s, offset, count);
 }
 
-static void setup_signal(rt_model_t *m, rt_signal_t *s, tree_t where,
-                         unsigned count, unsigned size, sig_flags_t flags,
-                         unsigned offset)
+static void setup_signal(rt_model_t *m, rt_signal_t *s, rt_scope_t *parent,
+                         tree_t where, unsigned count, unsigned size,
+                         sig_flags_t flags, unsigned offset)
 {
-   rt_scope_t *parent = model_thread(m)->active_scope;
-
    s->where   = where;
    s->n_nexus = 1;
    s->offset  = offset;
@@ -3997,7 +3995,8 @@ sig_shared_t *x_init_signal(int64_t count, uint32_t size, jit_scalar_t value,
 
    const size_t datasz = MAX(3 * count * size, 8);
    rt_signal_t *s = static_alloc(m, sizeof(rt_signal_t) + datasz);
-   setup_signal(m, s, where, count, size, flags, offset);
+   setup_signal(m, s, model_thread(m)->active_scope, where, count, size,
+                flags, offset);
 
    // The driving value area is also used to save the default value
    void *driving = s->shared.data + 2*s->shared.size;
@@ -4018,6 +4017,33 @@ sig_shared_t *x_init_signal(int64_t count, uint32_t size, jit_scalar_t value,
    }
 
    return &(s->shared);
+}
+
+rt_signal_t *create_signal(rt_model_t *m, rt_scope_t *scope, tree_t where,
+                           unsigned count, unsigned size, sig_flags_t flags,
+                           const void *values)
+{
+   // Create a new signal in an existing scope, for example from a VHPI
+   // plugin during elaboration.  Unlike x_init_signal this takes an
+   // explicit scope rather than the active elaboration scope.
+
+   TRACE("create signal %s count=%u size=%u flags=%x in scope %s",
+         istr(tree_ident(where)), count, size, flags, istr(scope->name));
+
+   const size_t datasz = MAX(3 * count * size, 8);
+   rt_signal_t *s = static_alloc(m, sizeof(rt_signal_t) + datasz);
+   setup_signal(m, s, scope, where, count, size, flags, 0);
+
+   // Initialise the effective, last and driving value areas
+   memset(s->shared.data, '\0', datasz);
+
+   if (values != NULL) {
+      void *driving = s->shared.data + 2*s->shared.size;
+      memcpy(s->shared.data, values, s->shared.size);
+      memcpy(driving, values, s->shared.size);
+   }
+
+   return s;
 }
 
 void x_drive_signal(sig_shared_t *ss, uint32_t offset, int32_t count)
